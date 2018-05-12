@@ -1,11 +1,10 @@
 package se.walkercrou.places;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import se.walkercrou.places.exception.GooglePlacesException;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -54,174 +53,180 @@ public class Place {
      * @return a detailed place
      */
     public static Place parseDetails(GooglePlaces client, String rawJson) {
-        JSONObject json = new JSONObject(rawJson);
+        try {
+            JSONObject json = new JSONObject(rawJson);
 
-        JSONObject result = json.getJSONObject(OBJECT_RESULT);
+            JSONObject result = json.getJSONObject(OBJECT_RESULT);
 
-        // easy stuff
-        String name = result.getString(STRING_NAME);
-        String id = result.getString(STRING_PLACE_ID);
-        String address = result.optString(STRING_ADDRESS, null);
-        String phone = result.optString(STRING_PHONE_NUMBER, null);
-        String iconUrl = result.optString(STRING_ICON, null);
-        String internationalPhone = result.optString(STRING_INTERNATIONAL_PHONE_NUMBER, null);
-        double rating = result.optDouble(DOUBLE_RATING, -1);
-        String url = result.optString(STRING_URL, null);
-        String vicinity = result.optString(STRING_VICINITY, null);
-        String website = result.optString(STRING_WEBSITE, null);
-        int utcOffset = result.optInt(INTEGER_UTC_OFFSET, -1);
-        String scopeName = result.optString(STRING_SCOPE);
-        Scope scope = scopeName == null ? null : Scope.valueOf(scopeName);
+            // easy stuff
+            String name = result.getString(STRING_NAME);
+            String id = result.getString(STRING_PLACE_ID);
+            String address = result.optString(STRING_ADDRESS, null);
+            String phone = result.optString(STRING_PHONE_NUMBER, null);
+            String iconUrl = result.optString(STRING_ICON, null);
+            String internationalPhone = result.optString(STRING_INTERNATIONAL_PHONE_NUMBER, null);
+            double rating = result.optDouble(DOUBLE_RATING, -1);
+            String url = result.optString(STRING_URL, null);
+            String vicinity = result.optString(STRING_VICINITY, null);
+            String website = result.optString(STRING_WEBSITE, null);
+            int utcOffset = result.optInt(INTEGER_UTC_OFFSET, -1);
+            String scopeName = result.optString(STRING_SCOPE);
+            Scope scope = scopeName == null ? null : Scope.valueOf(scopeName);
 
-        // grab the price rank
-        Price price = Price.NONE;
-        if (result.has(INTEGER_PRICE_LEVEL))
-            price = Price.values()[result.getInt(INTEGER_PRICE_LEVEL)];
+            // grab the price rank
+            Price price = Price.NONE;
+            if (result.has(INTEGER_PRICE_LEVEL))
+                price = Price.values()[result.getInt(INTEGER_PRICE_LEVEL)];
 
-        // location
-        JSONObject location = result.getJSONObject(OBJECT_GEOMETRY).getJSONObject(OBJECT_LOCATION);
-        double lat = location.getDouble(DOUBLE_LATITUDE), lng = location.getDouble(DOUBLE_LONGITUDE);
+            // location
+            JSONObject location = result.getJSONObject(OBJECT_GEOMETRY).getJSONObject(OBJECT_LOCATION);
+            double lat = location.getDouble(DOUBLE_LATITUDE), lng = location.getDouble(DOUBLE_LONGITUDE);
 
-        // hours of operation
-        JSONObject hours = result.optJSONObject(OBJECT_HOURS);
-        Status status = Status.NONE;
-        Hours schedule = new Hours();
-        if (hours != null) {
-            boolean statusDefined = hours.has(BOOLEAN_OPENED);
-            status = statusDefined && hours.getBoolean(BOOLEAN_OPENED) ? Status.OPENED : Status.CLOSED;
+            // hours of operation
+            JSONObject hours = result.optJSONObject(OBJECT_HOURS);
+            Status status = Status.NONE;
+            Hours schedule = new Hours();
+            if (hours != null) {
+                boolean statusDefined = hours.has(BOOLEAN_OPENED);
+                status = statusDefined && hours.getBoolean(BOOLEAN_OPENED) ? Status.OPENED : Status.CLOSED;
 
-            // periods of operation
-            JSONArray jsonPeriods = hours.optJSONArray(ARRAY_PERIODS);
-            if (jsonPeriods != null) {
-                for (int i = 0; i < jsonPeriods.length(); i++) {
-                    JSONObject jsonPeriod = jsonPeriods.getJSONObject(i);
+                // periods of operation
+                JSONArray jsonPeriods = hours.optJSONArray(ARRAY_PERIODS);
+                if (jsonPeriods != null) {
+                    for (int i = 0; i < jsonPeriods.length(); i++) {
+                        JSONObject jsonPeriod = jsonPeriods.getJSONObject(i);
 
-                    // opening information (from)
-                    JSONObject opens = jsonPeriod.getJSONObject(OBJECT_OPEN);
-                    Day openingDay = Day.values()[opens.getInt(INTEGER_DAY)];
-                    String openingTime = opens.getString(STRING_TIME);
+                        // opening information (from)
+                        JSONObject opens = jsonPeriod.getJSONObject(OBJECT_OPEN);
+                        Day openingDay = Day.values()[opens.getInt(INTEGER_DAY)];
+                        String openingTime = opens.getString(STRING_TIME);
 
-                    // if this place is always open, break.
-                    boolean alwaysOpened = openingDay == Day.SUNDAY && openingTime.equals("0000") && !jsonPeriod.has(OBJECT_CLOSE);
-                    if (alwaysOpened) {
-                        schedule.setAlwaysOpened(true);
-                        break;
-                    }
+                        // if this place is always open, break.
+                        boolean alwaysOpened = openingDay == Day.SUNDAY && openingTime.equals("0000") && !jsonPeriod.has(OBJECT_CLOSE);
+                        if (alwaysOpened) {
+                            schedule.setAlwaysOpened(true);
+                            break;
+                        }
 
-                    // closing information (to)
-                    JSONObject closes = jsonPeriod.getJSONObject(OBJECT_CLOSE);
-                    Day closingDay = Day.values()[closes.getInt(INTEGER_DAY)]; // to
-                    String closingTime = closes.getString(STRING_TIME);
+                        // closing information (to)
+                        JSONObject closes = jsonPeriod.getJSONObject(OBJECT_CLOSE);
+                        Day closingDay = Day.values()[closes.getInt(INTEGER_DAY)]; // to
+                        String closingTime = closes.getString(STRING_TIME);
 
-                    // add the period to the hours
-                    schedule.addPeriod(new Hours.Period().setOpeningDay(openingDay).setOpeningTime(openingTime)
-                            .setClosingDay(closingDay).setClosingTime(closingTime));
-                }
-            }
-        }
-
-        Place place = new Place();
-
-        // photos
-        JSONArray jsonPhotos = result.optJSONArray(ARRAY_PHOTOS);
-        List<Photo> photos = new ArrayList<>();
-        if (jsonPhotos != null) {
-            for (int i = 0; i < jsonPhotos.length(); i++) {
-                JSONObject jsonPhoto = jsonPhotos.getJSONObject(i);
-                String photoReference = jsonPhoto.getString(STRING_PHOTO_REFERENCE);
-                int width = jsonPhoto.getInt(INTEGER_WIDTH), height = jsonPhoto.getInt(INTEGER_HEIGHT);
-                photos.add(new Photo(place, photoReference, width, height));
-            }
-        }
-
-
-        // address components
-        JSONArray addrComponents = result.optJSONArray(ARRAY_ADDRESS_COMPONENTS);
-        List<AddressComponent> addressComponents = new ArrayList<>();
-        if (addrComponents != null) {
-            for (int i = 0; i < addrComponents.length(); i++) {
-                JSONObject ac = addrComponents.getJSONObject(i);
-                AddressComponent addr = new AddressComponent();
-
-                String longName = ac.optString(STRING_LONG_NAME, null);
-                String shortName = ac.optString(STRING_SHORT_NAME, null);
-
-                addr.setLongName(longName);
-                addr.setShortName(shortName);
-
-                // address components have types too
-                JSONArray types = ac.optJSONArray(ARRAY_TYPES);
-                if (types != null) {
-                    for (int a = 0; a < types.length(); a++) {
-                        addr.addType(types.getString(a));
+                        // add the period to the hours
+                        schedule.addPeriod(new Hours.Period().setOpeningDay(openingDay).setOpeningTime(openingTime)
+                                .setClosingDay(closingDay).setClosingTime(closingTime));
                     }
                 }
-
-                addressComponents.add(addr);
             }
-        }
 
-        // types
-        JSONArray jsonTypes = result.optJSONArray(ARRAY_TYPES);
-        List<String> types = new ArrayList<>();
-        if (jsonTypes != null) {
-            for (int i = 0; i < jsonTypes.length(); i++) {
-                types.add(jsonTypes.getString(i));
-            }
-        }
+            Place place = new Place();
 
-        // reviews
-        JSONArray jsonReviews = result.optJSONArray(ARRAY_REVIEWS);
-        List<Review> reviews = new ArrayList<>();
-        if (jsonReviews != null) {
-            for (int i = 0; i < jsonReviews.length(); i++) {
-                JSONObject jsonReview = jsonReviews.getJSONObject(i);
-
-                String author = jsonReview.optString(STRING_AUTHOR_NAME, null);
-                String authorUrl = jsonReview.optString(STRING_AUTHOR_URL, null);
-                String lang = jsonReview.optString(STRING_LANGUAGE, null);
-                int reviewRating = jsonReview.optInt(INTEGER_RATING, -1);
-                String text = jsonReview.optString(STRING_TEXT, null);
-                long time = jsonReview.optLong(LONG_TIME, -1);
-
-                // aspects of the review
-                JSONArray jsonAspects = jsonReview.optJSONArray(ARRAY_ASPECTS);
-                List<Review.Aspect> aspects = new ArrayList<>();
-                if (jsonAspects != null) {
-                    for (int a = 0; a < jsonAspects.length(); a++) {
-                        JSONObject jsonAspect = jsonAspects.getJSONObject(a);
-                        String aspectType = jsonAspect.getString(STRING_TYPE);
-                        int aspectRating = jsonAspect.getInt(INTEGER_RATING);
-                        aspects.add(new Review.Aspect(aspectRating, aspectType));
-                    }
+            // photos
+            JSONArray jsonPhotos = result.optJSONArray(ARRAY_PHOTOS);
+            List<Photo> photos = new ArrayList<>();
+            if (jsonPhotos != null) {
+                for (int i = 0; i < jsonPhotos.length(); i++) {
+                    JSONObject jsonPhoto = jsonPhotos.getJSONObject(i);
+                    String photoReference = jsonPhoto.getString(STRING_PHOTO_REFERENCE);
+                    int width = jsonPhoto.getInt(INTEGER_WIDTH), height = jsonPhoto.getInt(INTEGER_HEIGHT);
+                    photos.add(new Photo(place, photoReference, width, height));
                 }
-
-                reviews.add(new Review().addAspects(aspects).setAuthor(author).setAuthorUrl(authorUrl).setLanguage(lang)
-                        .setRating(reviewRating).setText(text).setTime(time));
             }
-        }
 
-        // alt-ids
-        JSONArray jsonAltIds = result.optJSONArray(ARRAY_ALT_IDS);
-        List<AltId> altIds = new ArrayList<>();
-        if (jsonAltIds != null) {
-            for (int i = 0; i < jsonAltIds.length(); i++) {
-                JSONObject jsonAltId = jsonAltIds.getJSONObject(i);
 
-                String placeId = jsonAltId.getString(STRING_PLACE_ID);
-                String sn = jsonAltId.getString(STRING_SCOPE);
-                Scope s = sn == null ? null : Scope.valueOf(sn);
+            // address components
+            JSONArray addrComponents = result.optJSONArray(ARRAY_ADDRESS_COMPONENTS);
+            List<AddressComponent> addressComponents = new ArrayList<>();
+            if (addrComponents != null) {
+                for (int i = 0; i < addrComponents.length(); i++) {
+                    JSONObject ac = addrComponents.getJSONObject(i);
+                    AddressComponent addr = new AddressComponent();
 
-                altIds.add(new AltId(client, placeId, s));
+                    String longName = ac.optString(STRING_LONG_NAME, null);
+                    String shortName = ac.optString(STRING_SHORT_NAME, null);
+
+                    addr.setLongName(longName);
+                    addr.setShortName(shortName);
+
+                    // address components have types too
+                    JSONArray types = ac.optJSONArray(ARRAY_TYPES);
+                    if (types != null) {
+                        for (int a = 0; a < types.length(); a++) {
+                            addr.addType(types.getString(a));
+                        }
+                    }
+
+                    addressComponents.add(addr);
+                }
             }
-        }
 
-        return place.setPlaceId(id).setClient(client).setName(name).setAddress(address).setIconUrl(iconUrl).setPrice(price)
-                .setLatitude(lat).setLongitude(lng).addTypes(types).setRating(rating).setStatus(status)
-                .setVicinity(vicinity).setPhoneNumber(phone).setInternationalPhoneNumber(internationalPhone)
-                .setGoogleUrl(url).setWebsite(website).addPhotos(photos).addAddressComponents(addressComponents)
-                .setHours(schedule).addReviews(reviews).setUtcOffset(utcOffset).setScope(scope).addAltIds(altIds)
-                .setJson(result);
+            // types
+            JSONArray jsonTypes = result.optJSONArray(ARRAY_TYPES);
+            List<String> types = new ArrayList<>();
+            if (jsonTypes != null) {
+                for (int i = 0; i < jsonTypes.length(); i++) {
+                    types.add(jsonTypes.getString(i));
+                }
+            }
+
+            // reviews
+            JSONArray jsonReviews = result.optJSONArray(ARRAY_REVIEWS);
+            List<Review> reviews = new ArrayList<>();
+            if (jsonReviews != null) {
+                for (int i = 0; i < jsonReviews.length(); i++) {
+                    JSONObject jsonReview = jsonReviews.getJSONObject(i);
+
+                    String author = jsonReview.optString(STRING_AUTHOR_NAME, null);
+                    String authorUrl = jsonReview.optString(STRING_AUTHOR_URL, null);
+                    String lang = jsonReview.optString(STRING_LANGUAGE, null);
+                    int reviewRating = jsonReview.optInt(INTEGER_RATING, -1);
+                    String text = jsonReview.optString(STRING_TEXT, null);
+                    long time = jsonReview.optLong(LONG_TIME, -1);
+
+                    // aspects of the review
+                    JSONArray jsonAspects = jsonReview.optJSONArray(ARRAY_ASPECTS);
+                    List<Review.Aspect> aspects = new ArrayList<>();
+                    if (jsonAspects != null) {
+                        for (int a = 0; a < jsonAspects.length(); a++) {
+                            JSONObject jsonAspect = jsonAspects.getJSONObject(a);
+                            String aspectType = jsonAspect.getString(STRING_TYPE);
+                            int aspectRating = jsonAspect.getInt(INTEGER_RATING);
+                            aspects.add(new Review.Aspect(aspectRating, aspectType));
+                        }
+                    }
+
+                    reviews.add(new Review().addAspects(aspects).setAuthor(author).setAuthorUrl(authorUrl).setLanguage(lang)
+                            .setRating(reviewRating).setText(text).setTime(time));
+                }
+            }
+
+            // alt-ids
+            JSONArray jsonAltIds = result.optJSONArray(ARRAY_ALT_IDS);
+            List<AltId> altIds = new ArrayList<>();
+            if (jsonAltIds != null) {
+                for (int i = 0; i < jsonAltIds.length(); i++) {
+                    JSONObject jsonAltId = jsonAltIds.getJSONObject(i);
+
+                    String placeId = jsonAltId.getString(STRING_PLACE_ID);
+                    String sn = jsonAltId.getString(STRING_SCOPE);
+                    Scope s = sn == null ? null : Scope.valueOf(sn);
+
+                    altIds.add(new AltId(client, placeId, s));
+                }
+            }
+
+            return place.setPlaceId(id).setClient(client).setName(name).setAddress(address).setIconUrl(iconUrl).setPrice(price)
+                    .setLatitude(lat).setLongitude(lng).addTypes(types).setRating(rating).setStatus(status)
+                    .setVicinity(vicinity).setPhoneNumber(phone).setInternationalPhoneNumber(internationalPhone)
+                    .setGoogleUrl(url).setWebsite(website).addPhotos(photos).addAddressComponents(addressComponents)
+                    .setHours(schedule).addReviews(reviews).setUtcOffset(utcOffset).setScope(scope).addAltIds(altIds)
+                    .setJson(result);
+        }
+        catch (JSONException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     /**
@@ -492,18 +497,18 @@ public class Place {
         return icon;
     }
 
-    /**
-     * Returns the icon image. {@link #downloadIcon()} must be called previous to this.
-     *
-     * @return image
-     */
-    public BufferedImage getIconImage() {
-        try {
-            return ImageIO.read(icon);
-        } catch (Exception e) {
-            throw new GooglePlacesException(e);
-        }
-    }
+//    /**
+//     * Returns the icon image. {@link #downloadIcon()} must be called previous to this.
+//     *
+//     * @return image
+//     */
+//    public BufferedImage getIconImage() {
+//        try {
+//            return ImageIO.read(icon);
+//        } catch (Exception e) {
+//            throw new GooglePlacesException(e);
+//        }
+//    }
 
     /**
      * Returns the name of this place.

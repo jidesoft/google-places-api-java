@@ -1,9 +1,5 @@
 package se.walkercrou.places;
 
-import se.walkercrou.places.exception.GooglePlacesException;
-
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
 import java.io.InputStream;
 
 import static se.walkercrou.places.GooglePlaces.MAX_PHOTO_SIZE;
@@ -57,18 +53,18 @@ public class Photo {
         return image;
     }
 
-    /**
-     * Returns an Image from the specified photo reference.
-     *
-     * @return image
-     */
-    public BufferedImage getImage() {
-        try {
-            return ImageIO.read(image);
-        } catch (Exception e) {
-            throw new GooglePlacesException(e);
-        }
-    }
+//    /**
+//     * Returns an Image from the specified photo reference.
+//     *
+//     * @return image
+//     */
+//    public BufferedImage getImage() {
+//        try {
+//            return ImageIO.read(image);
+//        } catch (Exception e) {
+//            throw new GooglePlacesException(e);
+//        }
+//    }
 
     /**
      * Returns the reference token to the photo.

@@ -1,6 +1,7 @@
 package se.walkercrou.places;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import se.walkercrou.places.exception.GooglePlacesException;
 
@@ -118,18 +119,24 @@ public class PlaceBuilder {
      * @return Google formatted JSON
      */
     public JSONObject toJson() {
-        JSONObject obj = new JSONObject().put(OBJECT_LOCATION, new JSONObject().put("lat", lat).put("lng", lng))
-                .put(STRING_NAME, name).put(STRING_TYPES, new JSONArray(types));
-        if (accuracy != -1)
-            obj.put(INTEGER_ACCURACY, accuracy);
-        if (phoneNumber != null)
-            obj.put(STRING_PHONE_NUMBER, phoneNumber);
-        if (address != null)
-            obj.put(STRING_ADDRESS, address);
-        if (website != null)
-            obj.put(STRING_WEBSITE, website);
-        if (locale != null)
-            obj.put(STRING_LANGUAGE, locale.getLanguage());
-        return obj;
+        try {
+            JSONObject obj = new JSONObject().put(OBJECT_LOCATION, new JSONObject().put("lat", lat).put("lng", lng))
+                    .put(STRING_NAME, name).put(STRING_TYPES, new JSONArray(types));
+            if (accuracy != -1)
+                obj.put(INTEGER_ACCURACY, accuracy);
+            if (phoneNumber != null)
+                obj.put(STRING_PHONE_NUMBER, phoneNumber);
+            if (address != null)
+                obj.put(STRING_ADDRESS, address);
+            if (website != null)
+                obj.put(STRING_WEBSITE, website);
+            if (locale != null)
+                obj.put(STRING_LANGUAGE, locale.getLanguage());
+            return obj;
+        }
+        catch (JSONException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 }

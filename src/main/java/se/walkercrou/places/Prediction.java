@@ -1,6 +1,7 @@
 package se.walkercrou.places;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
@@ -32,43 +33,49 @@ public class Prediction {
      * @return list of predictions
      */
     public static List<Prediction> parse(GooglePlaces client, String rawJson) {
-        JSONObject json = new JSONObject(rawJson);
-        checkStatus(json.getString(STRING_STATUS), json.optString(STRING_ERROR_MESSAGE));
+        try {
+            JSONObject json = new JSONObject(rawJson);
+            checkStatus(json.getString(STRING_STATUS), json.optString(STRING_ERROR_MESSAGE));
 
-        List<Prediction> predictions = new ArrayList<>();
-        JSONArray jsonPredictions = json.getJSONArray(ARRAY_PREDICTIONS);
-        for (int i = 0; i < jsonPredictions.length(); i++) {
-            JSONObject jsonPrediction = jsonPredictions.getJSONObject(i);
-            String placeId = jsonPrediction.getString(STRING_PLACE_ID);
-            String description = jsonPrediction.getString(STRING_DESCRIPTION);
+            List<Prediction> predictions = new ArrayList<>();
+            JSONArray jsonPredictions = json.getJSONArray(ARRAY_PREDICTIONS);
+            for (int i = 0; i < jsonPredictions.length(); i++) {
+                JSONObject jsonPrediction = jsonPredictions.getJSONObject(i);
+                String placeId = jsonPrediction.getString(STRING_PLACE_ID);
+                String description = jsonPrediction.getString(STRING_DESCRIPTION);
 
-            JSONArray jsonTerms = jsonPrediction.getJSONArray(ARRAY_TERMS);
-            List<DescriptionTerm> terms = new ArrayList<>();
-            for (int a = 0; a < jsonTerms.length(); a++) {
-                JSONObject jsonTerm = jsonTerms.getJSONObject(a);
-                String value = jsonTerm.getString(STRING_VALUE);
-                int offset = jsonTerm.getInt(INTEGER_OFFSET);
-                terms.add(new DescriptionTerm(value, offset));
-            }
-
-            JSONArray jsonTypes = jsonPrediction.optJSONArray(ARRAY_TYPES);
-            List<String> types = new ArrayList<>();
-            if (jsonTypes != null) {
-                for (int b = 0; b < jsonTypes.length(); b++) {
-                    types.add(jsonTypes.getString(b));
+                JSONArray jsonTerms = jsonPrediction.getJSONArray(ARRAY_TERMS);
+                List<DescriptionTerm> terms = new ArrayList<>();
+                for (int a = 0; a < jsonTerms.length(); a++) {
+                    JSONObject jsonTerm = jsonTerms.getJSONObject(a);
+                    String value = jsonTerm.getString(STRING_VALUE);
+                    int offset = jsonTerm.getInt(INTEGER_OFFSET);
+                    terms.add(new DescriptionTerm(value, offset));
                 }
+
+                JSONArray jsonTypes = jsonPrediction.optJSONArray(ARRAY_TYPES);
+                List<String> types = new ArrayList<>();
+                if (jsonTypes != null) {
+                    for (int b = 0; b < jsonTypes.length(); b++) {
+                        types.add(jsonTypes.getString(b));
+                    }
+                }
+
+                JSONArray substrArray = jsonPrediction.getJSONArray(ARRAY_MATCHED_SUBSTRINGS);
+                JSONObject substr = substrArray.getJSONObject(0);
+                int substrOffset = substr.getInt(INTEGER_OFFSET);
+                int substrLength = substr.getInt(INTEGER_LENGTH);
+
+                predictions.add(new Prediction().setPlaceId(placeId).setDescription(description).addTerms(terms).addTypes(types)
+                        .setSubstringLength(substrLength).setSubstringOffset(substrOffset).setClient(client));
             }
 
-            JSONArray substrArray = jsonPrediction.getJSONArray(ARRAY_MATCHED_SUBSTRINGS);
-            JSONObject substr = substrArray.getJSONObject(0);
-            int substrOffset = substr.getInt(INTEGER_OFFSET);
-            int substrLength = substr.getInt(INTEGER_LENGTH);
-
-            predictions.add(new Prediction().setPlaceId(placeId).setDescription(description).addTerms(terms).addTypes(types)
-                    .setSubstringLength(substrLength).setSubstringOffset(substrOffset).setClient(client));
+            return predictions;
         }
-
-        return predictions;
+        catch (JSONException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     /**

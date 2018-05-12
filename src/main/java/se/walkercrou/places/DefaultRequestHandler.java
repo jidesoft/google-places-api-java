@@ -1,21 +1,21 @@
 package se.walkercrou.places;
 
-import org.apache.commons.io.IOUtils;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.impl.client.HttpClientBuilder;
-
 import java.io.IOException;
 import java.io.InputStream;
+
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 public class DefaultRequestHandler implements RequestHandler {
     /**
      * The default and recommended character encoding.
      */
     public static final String DEFAULT_CHARACTER_ENCODING = "UTF-8";
-    private final HttpClient client = HttpClientBuilder.create().build();
+    public static final MediaType JSON
+            = MediaType.parse("application/json; charset=utf-8");
     private String characterEncoding;
 
     /**
@@ -54,8 +54,10 @@ public class DefaultRequestHandler implements RequestHandler {
         this.characterEncoding = characterEncoding;
     }
 
-    private String readString(HttpResponse response) throws IOException {
-        String str = IOUtils.toString(response.getEntity().getContent(), characterEncoding);
+    private final OkHttpClient client = new OkHttpClient();
+
+    private String readString(Response response) throws IOException {
+        String str = response.body().string();
         if (str == null || str.trim().length() == 0) {
             return null;
         }
@@ -64,36 +66,45 @@ public class DefaultRequestHandler implements RequestHandler {
 
     @Override
     public InputStream getInputStream(String uri) throws IOException {
-        HttpGet get = new HttpGet(uri);
+        Request request = new Request.Builder()
+                .url(uri)
+                .build();
         try {
-            return client.execute(get).getEntity().getContent();
+            Response response = client.newCall(request).execute();
+            return response.body().byteStream();
         } catch (Exception e) {
             throw new IOException(e);
         } finally {
-            get.releaseConnection();
         }
     }
 
     @Override
     public String get(String uri) throws IOException {
-        HttpGet get = new HttpGet(uri);
+        Request request = new Request.Builder()
+                .url(uri)
+                .build();
         try {
-            return readString(client.execute(get));
+            Response response = client.newCall(request).execute();
+            return response.body().string();
         } catch (Exception e) {
             throw new IOException(e);
         } finally {
-            get.releaseConnection();
         }
     }
 
     @Override
-    public String post(HttpPost data) throws IOException {
+    public String post(String uri, String json) throws IOException {
+        RequestBody body = RequestBody.create(JSON, json);
+        Request request = new Request.Builder()
+                .url(uri)
+                .post(body)
+                .build();
         try {
-            return readString(client.execute(data));
+            Response response = client.newCall(request).execute();
+            return response.body().string();
         } catch (Exception e) {
             throw new IOException(e);
         } finally {
-            data.releaseConnection();
         }
     }
 }
