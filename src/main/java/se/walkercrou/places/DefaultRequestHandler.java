@@ -72,9 +72,11 @@ public class DefaultRequestHandler implements RequestHandler {
         try {
             Response response = client.newCall(request).execute();
             return response.body().byteStream();
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             throw new IOException(e);
-        } finally {
+        }
+        finally {
         }
     }
 
@@ -85,11 +87,14 @@ public class DefaultRequestHandler implements RequestHandler {
                 .build();
         try {
             Response response = client.newCall(request).execute();
-            return response.body().string();
-        } catch (Exception e) {
-            throw new IOException(e);
-        } finally {
+            if (response.body() != null) {
+                return response.body().string();
+            }
         }
+        catch (Exception e) {
+            throw new IOException(e);
+        }
+        return null;
     }
 
     @Override
@@ -101,10 +106,13 @@ public class DefaultRequestHandler implements RequestHandler {
                 .build();
         try {
             Response response = client.newCall(request).execute();
-            return response.body().string();
-        } catch (Exception e) {
-            throw new IOException(e);
-        } finally {
+            if (response.body() != null) {
+                return response.body().string();
+            }
         }
+        catch (Exception e) {
+            throw new IOException(e);
+        }
+        return null;
     }
 }
